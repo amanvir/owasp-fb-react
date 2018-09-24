@@ -1,0 +1,35 @@
+{
+  "name": "owasp-fb-react-talk",
+  "version": "1.0.0",
+  "description": "Slides for my OWASP London talk at the Facebook Office",
+  "main": "theme.js",
+  "dependencies": {
+    "dompurify": "^1.0.7",
+    "jsdom": "^12.0.0",
+    "mdx-deck": "^1.7.1",
+    "styled-components": "^3.4.5"
+  },
+  "devDependencies": {
+    "eslint": "^5.5.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jsx-a11y": "^6.1.1",
+    "eslint-plugin-react": "^7.11.1",
+    "prettier": "1.14.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "mdx-deck slides.mdx",
+    "build": "mdx-deck build slides.mdx"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amanvir/owasp-fb-react.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/amanvir/owasp-fb-react/issues"
+  },
+  "homepage": "https://github.com/amanvir/owasp-fb-react#readme"
+}

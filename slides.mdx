@@ -1,0 +1,380 @@
+export { default as theme } from './theme'
+import { FullScreenCode, SplitRight } from 'mdx-deck/layouts'
+import BasicComponent from './components/BasicComponent'
+import DangerouslySet from './components/DangerouslySet'
+import DOMPurifyExample from './components/DOMPurifyExample'
+import URLIssue from './components/URLIssue'
+import URLIssueFixed from './components/URLIssueFixed'
+
+# Reviewing and Securing React Applications 
+---
+# Bio 
+- Amanvir Sangha 
+- Security Consultant @ Synopsys SIG 
+- Interests: Static Analysis, Application Security
+
+---
+# This Talk
+- Quick introduction to React
+- Securing your React application
+- Remediation
+
+---
+# What is React?
+- Front-end library for building user interfaces
+- Components based
+- View rendering only (external dependencies for routing etc.)
+- Virtual DOM for faster rendering
+- One-way binding components
+
+---
+# Why React?
+- Rapid prototyping (e.g. `create-react-app`)
+- High rate of adoption
+- Small attack surface
+
+---
+```jsx
+
+import React from 'react';
+
+class BasicComponent extends React.Component {
+
+  state = {
+    text: 'Hello world!',
+  };
+
+  handleChange(e) {
+    this.setState({text: e.target.value})
+  }
+
+  render() {
+    return (
+      <div>
+
+        <input 
+          onChange={this.handleChange.bind(this)} 
+          type='text'>
+        </input>
+
+        <h1>{this.state.text}</h1>
+
+      </div>
+    );
+  }
+}
+
+```
+export default SplitRight
+
+<BasicComponent/>
+
+---
+```jsx
+export default class DangerouslySet extends React.Component {
+
+  state = {
+    text: '<b>Hello world!</b>',
+  };
+
+  handleChange(e) {
+    this.setState({text: e.target.value})
+  }
+
+  danger(input) {
+    return {__html: input}
+  }
+
+  render() {
+    return (
+      <div>
+        <input 
+          onChange={this.handleChange.bind(this)} 
+          type='text'>
+        </input>
+
+        <h1 
+          dangerouslySetInnerHTML=
+          {this.danger(this.state.text)}
+        </h1>
+      </div>
+    );
+  }
+}
+```
+export default SplitRight
+
+DangerouslySetInnerHTML
+
+<DangerouslySet/>
+---
+# Who would do that?
+
+---
+# Signal (Desktop)[^1]
+
+- Electron based application 
+- Used `dangerouslySetInnerHTML` under the hood[^2]
+- The patch:
+```jsx
+- <div className="text" dangerouslySetInnerHTML={{ __html: text }} />
++ <div className="text">
++   <MessageBody text={text} />
++ </div>
+```
+
+[^1]: https://thehackerblog.com/i-too-like-to-live-dangerously-accidentally-finding-rce-in-signal-desktop-via-html-injection-in-quoted-replies/
+[^2]: https://github.com/signalapp/Signal-Desktop/commit/4e5c8965ff72576a9e20850dd30d9985f4073192
+
+---
+# Remediation
+- Never use `dangerouslySetInnerHTML` with user-supplied input
+- If absolutely necessary, use iFrame sandboxing via other origins specifically for user-supplied content 
+- Use DomPurify[^1]
+
+[^1]: https://github.com/cure53/DOMPurify
+
+---
+```jsx
+export default class DOMPurify extends React.Component {
+
+  state = {
+    text: '<b>Hello world!</b>',
+  };
+  
+  handleChange(e) {
+    this.setState({text: e.target.value})
+  }
+
+  purify(input) {
+    return {__html: DOMPurify.sanitize(input)}
+  }
+
+  render() {
+    return (
+      <div>
+        <input 
+          onChange={this.handleChange.bind(this)} 
+          type='text'>
+        </input>
+
+        <h1 
+        dangerouslySetInnerHTML={this.purify(this.state.text)}>
+        </h1>
+      </div>
+    );
+  }
+}
+
+```
+export default SplitRight
+
+DOMPurify
+
+<DOMPurifyExample/>
+---
+
+```jsx
+export default class URLIssue extends React.Component {
+
+  state = {
+    links: []
+  };
+  
+  addLink(e) {
+    this.setState({
+      links: [...this.state.links, e.target.value] 
+    })
+  }
+
+  render() {
+    return (
+    <div>
+      <h1>Links</h1>
+      <input 
+         onKeyPress={this.addLink.bind(this)} 
+         type='text'>
+      </input>
+
+      <ul>
+        {this.state.links.map(link => 
+            <li><a href={link}>{link}</a></li>
+        )}
+      </ul>
+
+    </div>
+    );
+  }
+}
+```
+export default SplitRight
+
+<URLIssue/>
+
+---
+```javascript
+export default class URLIssueFixed extends React.Component {
+
+  state = {
+    links: []
+  };
+
+  addLink(e) {
+    const userSuppliedURL = e.target.value;
+    const parsed = new URL(userSuppliedURL);
+    if(parsed.protocol !== "https:") {
+      return;
+    }
+
+    e.key === 'Enter' ?  
+      this.setState({
+        links: [...this.state.links, userSuppliedURL] 
+      }) : ''
+  }
+
+  render() {
+    //render it
+  }
+}
+```
+
+export default SplitRight
+
+Leverage whitelisting to prevent unsafe URI schemes
+
+<URLIssueFixed/>
+
+---
+# Server-side Rendering
+- You can render React components on the server prior to sending to the client
+- Improves response times and user experience 
+- Allows for code splitting 
+- Useful for SEO
+- But: Increases complexity, adds to attack surface
+
+---
+# Careful with Server-side Rendering!
+```javascript
+function renderFullPage(html, preloadedState) {
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <title>Redux Universal Example</title>
+      </head>
+      <body>
+        <div id="root">${html}</div>
+        <script>
+          window.__PRELOADED_STATE__ = ${JSON.stringify(preloadedState)}
+        </script>
+        <script src="/static/bundle.js"></script>
+      </body>
+    </html>
+    `
+}
+```
+- May lead to reflected XSS issues in your application [^1]
+
+[^1]: https://redux.js.org/recipes/serverrendering#security-considerations
+
+---
+# Remediation
+```html
+<script>
+	// WARNING: See the following for security issues around embedding JSON in HTML:
+	// http://redux.js.org/recipes/ServerRendering.html#security-considerations
+	window.__PRELOADED_STATE__ = ${JSON.stringify(preloadedState).replace(/</g, '\\u003c')}
+</script>
+```
+
+- Alternatively, use the `serialize-javascript` package
+
+---
+# Keep the framework updated!
+- Recently patched issue with ReactDOMServer API[^1]:
+```javascript
+let props = {};
+props[userProvidedData] = "hello";
+let element = <div {...props} />;
+let html = ReactDOMServer.renderToString(element);
+```
+
+- Previous known issue with `createElement`, no longer works due to patch in 2015[^2]:
+```javascript
+React.createElement(userInput)
+```
+
+
+[^1]: https://reactjs.org/blog/2018/08/01/react-v-16-4-2.html
+[^2]: https://github.com/facebook/react/pull/4832 the issue was originally found by Daniel LeCheminant: http://danlec.com/blog/xss-via-a-spoofed-react-element
+
+---
+# Third-Party Components
+- Welcome to NPM land where 99% of your application is dependencies
+- Very tempting to use external components
+- Github stars !== "secure"
+
+---
+# Client-side CSRF
+- Actually a bug found on FB bug bounty[^1]
+- Boils down to two things:
+  * Lack of path normalization 
+  * URLs that conduct sensitive operations on the same origin (via GraphQL in this instance)
+
+[^1]: As reported to Facebook by Philippe Harewood: https://www.facebook.com/notes/facebook-bug-bounty/client-side-csrf/2056804174333798/
+
+---
+# Client-side CSRF
+Most single page applications contain a function to attach an JWT or CSRF token with each request:
+```javascript
+componentWillMount() {
+  const options = {
+    headers: { 'Authorization': getToken() }
+  };
+
+  const userSuppliedInput = window.location.hash.substr(1);
+  fetch(`/sensitive-operation/${userSuppliedInput}`, options);
+}
+```
+An attacker abuse this: 
+```
+https://application.com/mycomponent#../../other-operation
+```
+Which will send the token with the request
+
+---
+# Remediation
+- Leverage whitelisting on user supplied input
+- Normalize URLs prior to making the request (especially authenticated requests) 
+
+---
+# Proactive Measures
+- Leverage CSP with strict-dynamic[^1]
+- WebPack has easy integration for SRI (see `webpack-subresource-integrity`)[^2]
+
+```javascript
+const compiler = webpack({
+    plugins: [
+        new SriPlugin({
+            hashFuncNames: ['sha256', 'sha384'],
+        }),
+    ],
+});
+```
+[^1]: https://ai.google/research/pubs/pub45542.pdf
+[^2]: https://www.npmjs.com/package/webpack-subresource-integrity
+
+---
+# Conclusion
+
+- Be careful with `dangerouslySetInnerHTML`
+- Leverage URL protocol whitelisting 
+- Double check any third-party components
+- Make generous use of `npm audit` for dependencies and keep your dependencies up to date
+- Leverage linting to detect use of dangerous functions and limit bad coding patterns (e.g. `eslint`)
+
+---
+# Thanks! Any questions?
+
+### Twitter: @_amanvir
+
